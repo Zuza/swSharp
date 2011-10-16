@@ -83,7 +83,7 @@ extern void swGPUParamSearch(Chain* rowChainL, Chain* columnChainL,
     SWPrefs* swPrefsL) {
 
     SWResult* swResult = 
-        swDataGetResult(swSolveGPU(rowChain, columnChain, swPrefs), 0);
+        swDataGetResult(swSolveGPU(rowChainL, columnChainL, swPrefsL), 0);
 
     rowChain = rowChainL;
     columnChain = columnChainL;
