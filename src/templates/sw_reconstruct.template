@@ -1,0 +1,337 @@
+typedef struct HirshbergParent {
+    int frontGap; // boolean
+    int backGap; // boolean
+    int startRow;
+    int startColumn;
+    int endRow;
+    int endColumn;
+} HirshbergParent;
+
+__global__ static void solveShort(int diagonal, ChainCode* rowChain, 
+    ChainCode* columnChain, Bus bus) {
+
+    int row = getRow(diagonal);
+    int column = getColumn();
+
+    // If column is negative it means current thread starts proccesing from 
+    // the end of the row of the previous proccesing row.
+    if (column < 0) {
+        column = column + GPU_CNST.COLUMNS;
+        row = row - GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+    }
+
+    // Read in row codes. Since solving is done horizontal row codes are 
+    // read only once every processing row.
+    ChainCode columnCode;
+    ChainCode rowCodes[ALPHA];
+    copyChain(rowChain, rowCodes, row, ALPHA);
+
+    extern __shared__ SharedMemory sharedMemory[];
+    sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
+    sharedMemory[threadIdx.x].result.score = 0;
+
+    SWItem swItem = swItemEmpty;
+
+    HBusItem hBusItem;
+    VBusItem vBusItem;
+
+    getVBus(&vBusItem, bus.vertical, row, column, NW);
+    vBusToSWItem(&swItem, &vBusItem);
+
+    __syncthreads();
+
+    int iterations = GPU_CNST.THREADS;
+    int isLast; // boolean
+    int rowValid = ((row >= 0) && (row < GPU_CNST.REAL_ROWS)); // boolean
+
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+    
+        if (rowValid) {
+
+            columnCode = columnChain[column];
+
+            hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
+            hBusToSWItem(&swItem, &hBusItem);
+
+            swItemSolve(&swItem, rowCodes, columnCode, NW);
+
+            swItemProgresses(&swItem);
+
+            swItemToHBus(&swItem, &hBusItem);
+
+            isLast = (iteration == iterations - 1) || (row == GPU_CNST.REAL_ROWS - 1);
+            storeHBus(hBusItem, sharedMemory, bus.horizontal, column, isLast);
+        }
+
+        column++;
+
+        if (column == GPU_CNST.COLUMNS) {
+
+            // After thread finishes a row it starts with a new row. 
+            column = 0;
+            row = row + GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+            rowValid = ((row >= 0) && (row < GPU_CNST.ROWS)); // boolean
+
+            // Restart solving item.
+            swItem = swItemEmpty;
+            
+            // Copy column codes of new GPU_CNST.ROWS.
+            copyChain(rowChain, rowCodes, row, ALPHA);
+
+            getVBus(&vBusItem, bus.vertical, row, column, NW);
+            vBusToSWItem(&swItem, &vBusItem);
+        }
+
+        // Because of the iterative reading of upper values make sure threads
+        // are synchronized in every loop iteration.
+        __syncthreads();
+    }
+
+    if (rowValid) {
+        swItemToVBus(&swItem, &vBusItem);
+        bus.vertical[getVBusIdx(row)] = vBusItem;
+    }
+}
+
+__global__ static void solveLong(int diagonal, ChainCode* rowChain, 
+    ChainCode* columnChain, Bus bus) {
+
+    extern __shared__ SharedMemory sharedMemory[];
+    int row = getRow(diagonal);
+
+    if (row >= 0 && row < GPU_CNST.ROWS) {
+
+        int column = GPU_CNST.CELL_WIDTH * (GPU_CNST.BLOCKS - blockIdx.x - 1) 
+            - threadIdx.x + GPU_CNST.THREADS;
+
+        // Read in row codes. Since solving is done horizontal row codes are 
+        // read only once every processing row.
+        ChainCode rowCodes[ALPHA];
+        copyChain(rowChain, rowCodes, row, ALPHA);
+
+        // Make sure all GPU_CNST.THREADS are over with reading.
+        __syncthreads();
+
+        SWItem swItem = swItemEmpty;
+
+        VBusItem vBusItem;
+
+        getVBus(&vBusItem, bus.vertical, row, column, NW);
+        vBusToSWItem(&swItem, &vBusItem);
+
+        sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
+
+        __syncthreads();
+
+        HBusItem hBusItem;
+        ChainCode columnCode;
+        int iterations = GPU_CNST.CELL_WIDTH - GPU_CNST.THREADS;
+        int isLast; // boolean
+
+
+        for (int iteration = 0; iteration < iterations; ++iteration, ++column) {
+
+            columnCode = columnChain[column];
+
+            hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
+            hBusToSWItem(&swItem, &hBusItem);
+
+            swItemSolve(&swItem, rowCodes, columnCode, NW);
+
+            swItemProgresses(&swItem);
+
+            swItemToHBus(&swItem, &hBusItem);
+
+            isLast = (iteration == iterations - 1) || (row == GPU_CNST.REAL_ROWS - 1);
+            storeHBus(hBusItem, sharedMemory, bus.horizontal, column, isLast);
+
+            __syncthreads();
+        }
+
+        swItemToVBus(&swItem, &vBusItem);
+        bus.vertical[getVBusIdx(row)] = vBusItem;
+    }
+}
+
+static HBusItem* getHBus(Chain* rowChain, Chain* columnChain, SWPrefs* swPrefs) {
+
+    int rows = chainGetLength(rowChain);
+    int columns = chainGetLength(columnChain);
+
+    SWData* swData = swDataCreate(rows, columns, swPrefs);
+
+    prepareParameters(columns, swPrefs);
+    prepareConstants(rows, columns, swPrefs);
+    prepareMatching(swPrefs);
+
+    printMemoryUsage();
+
+    ChainCode* rowChainGPU = initChainGPU(rowChain, CPU_CNST.ROWS, swPrefs);
+    ChainCode* columnChainGPU = initChainGPU(columnChain, CPU_CNST.COLUMNS, swPrefs);
+
+    Bus busGPU = {initHBusGPU(swPrefs, NW), initVBusGPU()};
+
+    int hBusSize = CPU_CNST.COLUMNS * sizeof(HBusItem);
+    HBusItem* hBus = (HBusItem*) malloc(hBusSize);
+
+    int diagonals = getDiagonalNmr();
+    int sharedMemorySize = CPU_CNST.THREADS * sizeof(SharedMemory);
+
+    for (int diagonal = 0; diagonal < diagonals; ++diagonal) {
+
+        solveShort<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
+            (diagonal, rowChainGPU, columnChainGPU, busGPU);
+        solveLong<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
+            (diagonal, rowChainGPU, columnChainGPU, busGPU);
+
+        cudaThreadSynchronize();
+    }
+
+    cudaMemcpy(hBus, busGPU.horizontal, hBusSize, cudaMemcpyDeviceToHost);
+
+    cudaFree(busGPU.horizontal);
+    cudaFree(busGPU.vertical);
+    cudaFree(rowChainGPU);
+    cudaFree(columnChainGPU);
+
+    cudaError();
+
+    return hBus;
+}
+
+static void hirschberg(SWHirschbergData* data, Chain* rowChain, 
+    Chain* columnChain, SWPrefs* swPrefs, HirshbergParent parent) {
+
+    int rows = chainGetLength(rowChain);
+    int columns = chainGetLength(columnChain);
+
+    int limit = swPrefsGetReconstructBlockLimit(swPrefs);
+
+    if (rows < limit || columns < limit) {
+        swHirschbergDataAddBlock(
+            data, 
+            parent.startRow, 
+            parent.startColumn, 
+            parent.endRow, 
+            parent.endColumn, 
+            parent.frontGap, 
+            parent.backGap 
+        );
+        return;
+    }
+
+    int row = rows / 2 - 1;
+    int column;
+
+    SWPrefsPenalty gapOpen = swPrefsGetGapOpen(swPrefs);
+    SWPrefsPenalty gapExtend = swPrefsGetGapExtend(swPrefs);
+
+    Chain* upRowSubchain = subchain(rowChain, 0, row);
+    Chain* downRowSubchain = reverseSubchain(rowChain, row + 1, rows - 1);
+
+    Chain* reverseColumn = reverseSubchain(columnChain, 0, columns - 1);
+
+    HBusItem* upHalf = getHBus(upRowSubchain, columnChain, swPrefs);
+    HBusItem* downHalf = getHBus(downRowSubchain, reverseColumn, swPrefs);
+
+    SWAffineScore upScore;
+    SWAffineScore downScore;
+
+    MatcherScore upEmptyScore;
+    MatcherScore downEmptyScore;
+    
+    if (parent.frontGap) {
+        upEmptyScore = -(row + 1) * gapExtend;
+    } else {
+        upEmptyScore = -gapOpen - row * gapExtend;
+    }
+
+    if (parent.backGap) {
+        downEmptyScore = -(rows - row - 1) * gapExtend;
+    } else {
+        downEmptyScore = -gapOpen - (rows - row - 2) * gapExtend;
+    }
+
+    MatcherScore score = MATCHER_SCORE_MIN;
+    MatcherScore localScore = 0;
+    MatcherScore affineScore = 0;
+
+    int gap = 0;
+    int localGap;
+
+    for(int up = -1, down = columns - 1; up < columns; ++up, --down) {
+
+        if (up == -1) {
+            upScore.score = upEmptyScore;
+            upScore.affine = upEmptyScore;
+        } else {
+            upScore = upHalf[up].deleteScr;
+            localGap = 1;
+        }
+
+        if (down == -1) {
+            downScore.score = downEmptyScore;
+            downScore.affine = downEmptyScore;
+        } else {
+            downScore = downHalf[down].deleteScr;
+            localGap = 1;
+        }
+
+        localGap = 0;
+        localScore = upScore.score + downScore.score;
+        affineScore = downScore.affine + upScore.affine + gapOpen - gapExtend;
+
+        if (localScore < affineScore) {
+            localScore = affineScore;
+            localGap = 1;
+        }
+
+        if (localScore >= score) {
+            score = localScore;
+            gap = localGap;
+            column = up;            
+        }
+    }
+
+    chainDelete(reverseColumn);
+    chainDelete(upRowSubchain);
+    chainDelete(downRowSubchain);
+
+    free(upHalf);
+    free(downHalf);
+
+    Chain* upRow = subchain(rowChain, 0, row);
+    Chain* upColumn = subchain(columnChain, 0, column);
+
+    HirshbergParent upParent;
+    upParent.startRow = parent.startRow;
+    upParent.startColumn = parent.startColumn;
+    upParent.endRow = parent.startRow + row;
+    upParent.endColumn = parent.startColumn + column;
+    upParent.frontGap = parent.frontGap;
+    upParent.backGap = gap;
+
+    hirschberg(data, upRow, upColumn, swPrefs, upParent);
+
+
+    chainDelete(upRow);
+    chainDelete(upColumn);
+
+
+    Chain* downRow = subchain(rowChain, row + 1, rows - 1);
+    Chain* downColumn = subchain(columnChain, column + 1, columns - 1);
+
+    HirshbergParent downParent;
+    downParent.startRow = parent.startRow + row + 1;
+    downParent.startColumn = parent.startColumn + column + 1;
+    downParent.endRow = parent.startRow + rows - 1;
+    downParent.endColumn = parent.startColumn + columns - 1;
+    downParent.frontGap = gap;
+    downParent.backGap = parent.backGap;
+
+    hirschberg(data, downRow, downColumn, swPrefs, downParent);
+
+
+    chainDelete(downRow);
+    chainDelete(downColumn);
+}

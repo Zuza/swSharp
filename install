@@ -1,0 +1,13 @@
+#!/bin/bash
+if [ ! -d "obj" ]
+then
+    mkdir obj
+else
+    a=`rm obj/*`
+fi
+if [ -f "sw" ]
+then
+    a=`rm sw`
+fi
+make
+rm -rf obj

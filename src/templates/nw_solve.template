@@ -1,0 +1,372 @@
+__global__ static void solveShort(int diagonal, ChainCode* rowChain, 
+    ChainCode* columnChain, Bus bus) {
+
+    int row = getRow(diagonal);
+    int column = getColumn();
+
+    // If column is negative it means current thread starts proccesing from 
+    // the end of the row of the previous proccesing row.
+    if (column < 0) {
+        column = column + GPU_CNST.COLUMNS;
+        row = row - GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+    }
+
+    // Read in row codes. Since solving is done horizontal row codes are 
+    // read only once every processing row.
+    ChainCode columnCode;
+    ChainCode rowCodes[ALPHA];
+    copyChain(rowChain, rowCodes, row, ALPHA);
+
+    extern __shared__ SharedMemory sharedMemory[];
+    sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
+
+    SWItem swItem = swItemEmpty;
+
+    HBusItem hBusItem;
+    VBusItem vBusItem;
+
+    getVBus(&vBusItem, bus.vertical, row, column, NW);
+    vBusToSWItem(&swItem, &vBusItem);
+
+    __syncthreads();
+
+    int iterations = GPU_CNST.THREADS;
+    int isLast; // boolean
+    int rowValid = ((row >= 0) && (row < GPU_CNST.ROWS)); // boolean
+
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+    
+        if (rowValid) {
+
+            columnCode = columnChain[column];
+
+            hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
+            hBusToSWItem(&swItem, &hBusItem);
+
+            swItemSolve(&swItem, rowCodes, columnCode, NW);
+
+            swItemProgresses(&swItem);
+
+            swItemToHBus(&swItem, &hBusItem);
+
+            isLast = iteration == iterations - 1;
+            storeHBus(hBusItem, sharedMemory, bus.horizontal, column, isLast);
+        }
+
+        column++;
+
+        if (column == GPU_CNST.COLUMNS) {
+
+            // After thread finishes a row it starts with a new row. 
+            column = 0;
+            row = row + GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+            rowValid = ((row >= 0) && (row < GPU_CNST.ROWS)); // boolean
+
+            // Restart solving item.
+            swItem = swItemEmpty;
+            
+            // Copy column codes of new GPU_CNST.ROWS.
+            copyChain(rowChain, rowCodes, row, ALPHA);
+
+            getVBus(&vBusItem, bus.vertical, row, column, NW);
+            vBusToSWItem(&swItem, &vBusItem);
+        }
+
+        // Because of the iterative reading of upper values make sure threads
+        // are synchronized in every loop iteration.
+        __syncthreads();
+    }
+
+    if (rowValid) {
+        swItemToVBus(&swItem, &vBusItem);
+        bus.vertical[getVBusIdx(row)] = vBusItem;
+    }
+}
+
+__global__ static void solveLong(int diagonal, ChainCode* rowChain, 
+    ChainCode* columnChain, Bus bus) {
+
+    extern __shared__ SharedMemory sharedMemory[];
+
+    int row = (diagonal + blockIdx.x - GPU_CNST.BLOCKS + 1) 
+        * (GPU_CNST.THREADS * ALPHA) + threadIdx.x * ALPHA;
+
+    if (row >= 0 && row < GPU_CNST.ROWS) {
+
+        int column = GPU_CNST.CELL_WIDTH * (GPU_CNST.BLOCKS - blockIdx.x - 1) 
+            - threadIdx.x + GPU_CNST.THREADS;
+
+        // Read in row codes. Since solving is done horizontal row codes are 
+        // read only once every processing row.
+        ChainCode rowCodes[ALPHA];
+        copyChain(rowChain, rowCodes, row, ALPHA);
+
+        // Make sure all GPU_CNST.THREADS are over with reading.
+        __syncthreads();
+
+        SWItem swItem = swItemEmpty;
+
+        VBusItem vBusItem;
+
+        getVBus(&vBusItem, bus.vertical, row, column, NW);
+        vBusToSWItem(&swItem, &vBusItem);
+
+        sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
+
+        __syncthreads();
+
+        HBusItem hBusItem;
+        ChainCode columnCode;
+        int iterations = GPU_CNST.CELL_WIDTH - GPU_CNST.THREADS;
+        int isLast; // boolean
+
+
+        for (int iteration = 0; iteration < iterations; ++iteration, ++column) {
+
+            columnCode = columnChain[column];
+
+            hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
+            hBusToSWItem(&swItem, &hBusItem);
+
+            swItemSolve(&swItem, rowCodes, columnCode, NW);
+
+            swItemProgresses(&swItem);
+
+            swItemToHBus(&swItem, &hBusItem);
+
+            isLast = iteration == iterations - 1;
+            storeHBus(hBusItem, sharedMemory, bus.horizontal, column, isLast);
+
+            __syncthreads();
+        }
+
+        swItemToVBus(&swItem, &vBusItem);
+        bus.vertical[getVBusIdx(row)] = vBusItem;
+    }
+}
+
+__global__ static void solveShortLast(int diagonal, ChainCode* rowChain, 
+    ChainCode* columnChain, Bus bus, Result* result) {
+
+    int row = getRow(diagonal);
+    int column = getColumn();
+
+    // If column is negative it means current thread starts proccesing from 
+    // the end of the row of the previous proccesing row.
+    if (column < 0) {
+        column = column + GPU_CNST.COLUMNS;
+        row = row - GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+    }
+
+    // Read in row codes. Since solving is done horizontal row codes are 
+    // read only once every processing row.
+    ChainCode columnCode;
+    ChainCode rowCodes[ALPHA];
+    copyChain(rowChain, rowCodes, row, ALPHA);
+
+    extern __shared__ SharedMemory sharedMemory[];
+    sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
+
+    SWItem swItem = swItemEmpty;
+
+    HBusItem hBusItem;
+    VBusItem vBusItem;
+
+    getVBus(&vBusItem, bus.vertical, row, column, NW);
+    vBusToSWItem(&swItem, &vBusItem);
+
+    __syncthreads();
+
+    int iterations = GPU_CNST.THREADS;
+    int isLast; // boolean
+    int rowValid = ((row >= 0) && (row < GPU_CNST.ROWS)); // boolean
+
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+    
+        if (rowValid) {
+
+            columnCode = columnChain[column];
+
+            hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
+            hBusToSWItem(&swItem, &hBusItem);
+
+            swItemSolve(&swItem, rowCodes, columnCode, NW);
+
+            if (abs(GPU_CNST.REAL_ROWS - 1 - row) < ALPHA && row < GPU_CNST.REAL_ROWS && column == GPU_CNST.REAL_COLUMNS - 1)  {
+                result[0].score = swItem.currentScr[GPU_CNST.REAL_ROWS - 1 - row].score;
+                break;
+            }
+
+            swItemProgresses(&swItem);
+
+            swItemToHBus(&swItem, &hBusItem);
+
+            isLast = iteration == iterations - 1;
+            storeHBus(hBusItem, sharedMemory, bus.horizontal, column, isLast);
+        }
+
+        column++;
+
+        if (column == GPU_CNST.COLUMNS) {
+
+            // After thread finishes a row it starts with a new row. 
+            column = 0;
+            row = row + GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+            rowValid = ((row >= 0) && (row < GPU_CNST.ROWS)); // boolean
+
+            // Restart solving item.
+            swItem = swItemEmpty;
+            
+            // Copy column codes of new GPU_CNST.ROWS.
+            copyChain(rowChain, rowCodes, row, ALPHA);
+
+            getVBus(&vBusItem, bus.vertical, row, column, NW);
+            vBusToSWItem(&swItem, &vBusItem);
+        }
+
+        // Because of the iterative reading of upper values make sure threads
+        // are synchronized in every loop iteration.
+        __syncthreads();
+    }
+
+    if (rowValid) {
+        swItemToVBus(&swItem, &vBusItem);
+        bus.vertical[getVBusIdx(row)] = vBusItem;
+    }
+}
+
+__global__ static void solveLongLast(int diagonal, ChainCode* rowChain, 
+    ChainCode* columnChain, Bus bus, Result* result) {
+
+    extern __shared__ SharedMemory sharedMemory[];
+
+    int row = (diagonal + blockIdx.x - GPU_CNST.BLOCKS + 1) 
+        * (GPU_CNST.THREADS * ALPHA) + threadIdx.x * ALPHA;
+
+    if (row >= 0 && row < GPU_CNST.ROWS) {
+
+        int column = GPU_CNST.CELL_WIDTH * (GPU_CNST.BLOCKS - blockIdx.x - 1) 
+            - threadIdx.x + GPU_CNST.THREADS;
+
+        // Read in row codes. Since solving is done horizontal row codes are 
+        // read only once every processing row.
+        ChainCode rowCodes[ALPHA];
+        copyChain(rowChain, rowCodes, row, ALPHA);
+
+        // Make sure all GPU_CNST.THREADS are over with reading.
+        __syncthreads();
+
+        SWItem swItem = swItemEmpty;
+
+        VBusItem vBusItem;
+
+        getVBus(&vBusItem, bus.vertical, row, column, NW);
+        vBusToSWItem(&swItem, &vBusItem);
+
+        sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
+
+        __syncthreads();
+
+        HBusItem hBusItem;
+        ChainCode columnCode;
+        int iterations = GPU_CNST.CELL_WIDTH - GPU_CNST.THREADS;
+        int isLast; // boolean
+
+
+        for (int iteration = 0; iteration < iterations; ++iteration, ++column) {
+
+            columnCode = columnChain[column];
+
+            hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
+            hBusToSWItem(&swItem, &hBusItem);
+
+            swItemSolve(&swItem, rowCodes, columnCode, NW);
+
+            if (abs(GPU_CNST.REAL_ROWS - 1 - row) < ALPHA && row < GPU_CNST.REAL_ROWS && column == GPU_CNST.REAL_COLUMNS - 1)  {
+                result[0].score = swItem.currentScr[GPU_CNST.REAL_ROWS - 1 - row].score;
+                break;
+            }
+
+            swItemProgresses(&swItem);
+
+            swItemToHBus(&swItem, &hBusItem);
+
+            isLast = iteration == iterations - 1;
+            storeHBus(hBusItem, sharedMemory, bus.horizontal, column, isLast);
+
+            __syncthreads();
+        }
+
+        swItemToVBus(&swItem, &vBusItem);
+        bus.vertical[getVBusIdx(row)] = vBusItem;
+    }
+}
+
+static SWData* nwSolveGPU(Chain* rowChain, Chain* columnChain, 
+    SWPrefs* swPrefs) {
+
+    int rows = chainGetLength(rowChain);
+    int columns = chainGetLength(columnChain);
+
+    SWData* swData = swDataCreate(rows, columns, swPrefs);
+
+    prepareParameters(columns, swPrefs);
+    prepareConstants(rows, columns, swPrefs);
+    prepareMatching(swPrefs);
+
+    ChainCode* rowChainGPU = initChainGPU(rowChain, CPU_CNST.ROWS, swPrefs);
+    ChainCode* columnChainGPU = initChainGPU(columnChain, CPU_CNST.COLUMNS, swPrefs);
+
+    Bus bus = {initHBusGPU(swPrefs, NW), initVBusGPU()};
+
+    int diagonals = CPU_CNST.BLOCKS + (CPU_CNST.ROWS / CPU_CNST.CELL_HEIGHT) 
+        + (CPU_CNST.ROWS % CPU_CNST.CELL_HEIGHT > 0);
+    int sharedMemorySize = CPU_CNST.THREADS * sizeof(SharedMemory);
+
+    int diagonal;
+    Result result;
+
+    Result* resultGPU;
+    cudaMalloc(&resultGPU, sizeof(Result));
+    cudaMemset(resultGPU, 0, sizeof(Result));
+
+    for (diagonal = 0; diagonal < diagonals - 5; ++diagonal) {
+
+        printPercentage(diagonal, diagonals);
+
+        solveShort<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
+            (diagonal, rowChainGPU, columnChainGPU, bus);
+        solveLong<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
+            (diagonal, rowChainGPU, columnChainGPU, bus);
+
+        cudaThreadSynchronize();
+    }
+
+    printf("%d\n", diagonals);
+
+    for (; diagonal < diagonals; ++diagonal) {
+
+        printPercentage(diagonal, diagonals);
+
+        solveShortLast<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
+            (diagonal, rowChainGPU, columnChainGPU, bus, resultGPU);
+        solveLongLast<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
+            (diagonal, rowChainGPU, columnChainGPU, bus, resultGPU);
+
+        cudaThreadSynchronize();
+    }
+
+    cudaMemcpy(&result, resultGPU, sizeof(Result), cudaMemcpyDeviceToHost);
+
+    swDataAddResult(swData, 
+        swResultCreate(result.score, rows - 1, columns - 1));
+
+    cudaFree(bus.horizontal);
+    cudaFree(bus.vertical);
+    cudaFree(rowChainGPU);
+    cudaFree(columnChainGPU);
+
+    cudaError();
+
+    return swData;
+}

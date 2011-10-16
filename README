@@ -1,0 +1,96 @@
+1) DEPENDENCIES
+2) INSTALLATION
+3) USAGE
+
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+1) DEPENDENCIES
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Application uses following software:
+    1) Linux shell
+    2) gcc 4.*+
+    3) nvcc 2.*+
+    4) make
+
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+2) INSTALLATION
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+For installation run the install script in the application root directory from
+the command line. Application root directory must be writable.
+
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+3) USAGE
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+./sw# -i <first_sequnce> -j <second_sequnce> [OPTIONS] [FLAGS]
+
+OPTIONS:
+    --query, -i <first_sequnce>                                      
+        fasta query file path
+    --target, -j <second_sequnce>
+        fasta database file path
+        fasta database are appended fasta files in a single text file
+    --matrix-file <file_path> 
+        (optional)
+        similarity matrix file path 
+        if given the similarity matrix is loaded from the file
+    --matrix-table <BLOSUM50|BLOSUM55|BLOSUM62|BLOSUM70|DNA|BLAST|CHIAR>
+        embedded similarity matrix
+        (optional) 
+        (default: CHIAR) 
+        if given --matrix-file option won't be used
+    --match <float> 
+        (optional)
+        match value  
+        if --match and --mismatch are given, --matrix-table and --matrix-file 
+        options are not used
+    --mismatch <float> 
+        (optional)
+        mismacth value  
+        if --match and --mismatch are given, --matrix-table and --matrix-file 
+        options are not used
+    --gap-open, -g <float> 
+        (optional)
+        (default: 5.0)
+        gap open value
+    --gap-extend, -e <float> 
+        (optional)
+        (default: 2.0)
+        gap extend value  
+    --threshold <float>
+        (optional)
+        (default: NO_THRESHOLD)
+        score threshold
+        program will output not just the max score and its reconstruction, but
+        all the scores which are above the given threshold
+    --min-hits <int>
+        (optional)
+        (default: 0)
+        the option is used with --window option, it means there must be at 
+        least min_hits of matchings in every window length segment
+    --window <int>
+        (optional)
+        (default: 0)
+        the option is used with --min-hits option, it means there must be at 
+        least min_hits of matchings in every window length segment
+FLAGS:
+    --complement 
+        (optional)
+        if input is a nucleotide, search also the other strand 
+    --solve 
+        (optional)
+        solve only 
+    --cpu 
+        (optional)
+        force CPU solving
+    --param-search 
+        (optional)
+        CUDA block and thread number optimization search
+    --verbose
+        (optional)
+        verbose
+    --global 
+        (optional)
+        global aligment 
+        if given --threshold this option won't be used
