@@ -113,9 +113,9 @@ static void statistics(Chain* rowChain, Chain* columnChain,
         printf("%s\n", SEPARATOR2);
     }
 
-    SWData* swData = smithWaterman(rowChain, columnChain, swPrefs);
-
     clock_t start = clock();
+
+    SWData* swData = smithWaterman(rowChain, columnChain, swPrefs);
 
     if (swPrefsComplement(swPrefs)) {
 
