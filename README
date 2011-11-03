@@ -26,7 +26,7 @@ Contact the author by mkorpar@gmail.com.
 
 Application uses following software:
     1) Linux shell
-    2) gcc 4.*+
+    2) gcc 4.4 (for newest nvcc) - depends on nvcc version
     3) nvcc 2.*+
     4) make
 
