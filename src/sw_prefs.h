@@ -89,5 +89,7 @@ extern char* swPrefsGetDatabaseFile(SWPrefs* swPrefs);
 extern int swPrefsGetMaximumGaps(SWPrefs* swPrefs);
 extern int swPrefsGetWindowSize(SWPrefs* swPrefs);
 
+extern int swPrefsShotgun(SWPrefs* swPrefs);
+
 extern void swPrefsPrint(SWPrefs* swPrefs);
 #endif // __SW_PREFSH__

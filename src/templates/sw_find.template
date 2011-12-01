@@ -41,7 +41,6 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
 
     extern __shared__ SharedMemory sharedMemory[];
     sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
-    sharedMemory[threadIdx.x].result.score = 0;
 
     SWItem swItem = swItemEmpty;
 
@@ -52,8 +51,6 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
     vBusToSWItem(&swItem, &vBusItem);
 
     __syncthreads();
-
-    Result localResult = {0, 0, 0};
 
     int iterations = GPU_CNST.THREADS;
     int isLast; // boolean
@@ -70,7 +67,7 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
 
             swItemSolve(&swItem, rowCodes, columnCode, NW);
 
-            updateResult(&swItem, &localResult, row, column);
+            updateResult(&swItem, &results[blockIdx.x], row, column);
 
             swItemProgresses(&swItem);
 
@@ -107,18 +104,12 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
         swItemToVBus(&swItem, &vBusItem);
         bus.vertical[getVBusIdx(row)] = vBusItem;
     }
-
-    if (localResult.score == SCORE) {
-        results[0] = localResult;
-    }
 }
 
 __global__ static void solveLong(int diagonal, ChainCode* rowChain, 
     ChainCode* columnChain, Bus bus, Result* results) {
 
     extern __shared__ SharedMemory sharedMemory[];
-    Result localResult = {0, 0, 0};
-    sharedMemory[threadIdx.x].result.score = 0;
 
     int row = getRow(diagonal);
 
@@ -155,7 +146,7 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
 
             swItemSolve(&swItem, rowCodes, columnCode, NW);
 
-            updateResult(&swItem, &localResult, row, column);
+            updateResult(&swItem, &results[blockIdx.x], row, column);
 
             swItemProgresses(&swItem);
 
@@ -169,10 +160,6 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
 
         swItemToVBus(&swItem, &vBusItem);
         bus.vertical[getVBusIdx(row)] = vBusItem;
-
-        if (localResult.score == SCORE) {
-            results[0] = localResult;
-        }
     }
 }
 
@@ -204,7 +191,7 @@ static SWData* swFindGPU(Chain* rowChain, Chain* columnChain,
 
     Bus busGPU = {initHBusGPU(swPrefs, NW), initVBusGPU()};
 
-    Result* resultsGPU = initResultsGPU(1);
+    Result* resultsGPU = initResultsGPU(CPU_CNST.BLOCKS);
     Result result;
 
     int diagonal;
@@ -224,7 +211,7 @@ static SWData* swFindGPU(Chain* rowChain, Chain* columnChain,
 
         cudaThreadSynchronize();
 
-        result = getResult(resultsGPU, 1);
+        result = getResult(resultsGPU, CPU_CNST.BLOCKS);
 
         if (preciseEqual(result.score, score)) {
             break;

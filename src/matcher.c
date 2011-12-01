@@ -34,6 +34,7 @@ Contact the author by mkorpar@gmail.com.
 #include "matrices/BLOSUM70.h"
 #include "matrices/BLAST.h"
 #include "matrices/CHIAR.h"
+#include "matrices/SHOTGUN.h"
 
 #define WILDCARD '*'
 
@@ -145,6 +146,10 @@ extern Matcher* matcherCreateEmbedded(char* typeName) {
         itemNumber = CHIAR_ITEM_NMR;
         items = CHIAR_ITEMS;
         scores = CHIAR_SCORES;
+    } else if (strcmp("SHOTGUN", typeName) == 0) {
+        itemNumber = SHOTGUN_ITEM_NMR;
+        items = SHOTGUN_ITEMS;
+        scores = SHOTGUN_SCORES;
     } else {
         printf("Warning: Similarity table %s not embedded. Using %s.\n",
             typeName, QUOTE(DEFUALT_MATCHER));

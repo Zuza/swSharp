@@ -137,6 +137,7 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
 
         HBusItem hBusItem;
         ChainCode columnCode;
+
         int iterations = GPU_CNST.CELL_WIDTH - GPU_CNST.THREADS;
         int isLast; // boolean
 
@@ -289,6 +290,7 @@ __global__ static void solveLongLast(int diagonal, ChainCode* rowChain,
 
         HBusItem hBusItem;
         ChainCode columnCode;
+
         int iterations = GPU_CNST.CELL_WIDTH - GPU_CNST.THREADS;
         int isLast; // boolean
 

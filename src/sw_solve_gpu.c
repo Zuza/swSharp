@@ -25,6 +25,8 @@ Contact the author by mkorpar@gmail.com.
 
 #include "sw_solve_gpu_sm.h"
 #include "sw_solve_gpu_mm.h"
+#include "sw_solve_shotgun_gpu_sm.h"
+#include "sw_solve_shotgun_gpu_mm.h"
 #include "sw_prefs.h"
 #include "sw_data.h"
 #include "chain.h"
@@ -34,10 +36,21 @@ extern SWData* swSolveGPU(Chain* rowChain, Chain* columnChain,
     SWPrefs* swPrefs) {
 
     int matcherType = matcherGetType(swPrefsGetMatcher(swPrefs));
+    int resultBlockSize = swPrefsShotgun(swPrefs);
 
     if (matcherType == MATCHER_MATRIX) {
+
+        if (resultBlockSize != 0) {
+            return swSolveShotgunGPUSM(rowChain, columnChain, swPrefs); 
+        }
+
         return swSolveGPUSM(rowChain, columnChain, swPrefs); 
     } else {
+
+        if (resultBlockSize != 0) {
+            return swSolveShotgunGPUMM(rowChain, columnChain, swPrefs); 
+        }
+
         return swSolveGPUMM(rowChain, columnChain, swPrefs); 
     }
 }

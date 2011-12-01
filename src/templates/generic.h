@@ -55,7 +55,6 @@ typedef struct Bus {
 } Bus;
 
 typedef struct SharedMemory {
-    Result result;
     HBusItem hBusItem;
 } SharedMemory;
 
@@ -427,6 +426,8 @@ __device__ inline void swItemProgresses(SWItem* swItem) {
 __device__ inline void updateResult(SWItem* swItem, Result* result, int row, 
     int column) {
 
+    if (!(column < GPU_CNST.REAL_COLUMNS)) return;
+
     for (int alphaIdx = 0; alphaIdx < ALPHA; ++alphaIdx) {
         if (swItem->currentScr[alphaIdx].score > result->score) {
             if (row + alphaIdx < GPU_CNST.REAL_ROWS) {
@@ -483,27 +484,4 @@ __device__ static inline void swItemSolve(SWItem* swItem, ChainCode* rowCodes,
     }
 
     swItem->deleteAffineScr = deleteAffineScr;
-}
-
-__device__ static inline void updateGlobalResult(Result* localResult, 
-    Result* globalResults, SharedMemory* sharedMemory) {
-    
-    sharedMemory[threadIdx.x].result = *localResult; 
-    __syncthreads();
-
-    if (threadIdx.x) return;
-
-    for (
-        int resultIdx = 1;
-        resultIdx < GPU_CNST.THREADS;
-        ++resultIdx
-    ) {
-        if (localResult->score <= sharedMemory[resultIdx].result.score) {
-            *localResult = sharedMemory[resultIdx].result;
-        }
-    }
-
-    if (localResult->score > globalResults[blockIdx.x].score) {
-        globalResults[blockIdx.x] = *localResult;
-    }
 }

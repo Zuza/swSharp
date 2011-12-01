@@ -48,7 +48,6 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
 
     extern __shared__ SharedMemory sharedMemory[];
     sharedMemory[threadIdx.x].hBusItem = hBusEmpty;
-    sharedMemory[threadIdx.x].result.score = 0;
 
     SWItem swItem = swItemEmpty;
 
@@ -145,9 +144,9 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
 
         HBusItem hBusItem;
         ChainCode columnCode;
+
         int iterations = GPU_CNST.CELL_WIDTH - GPU_CNST.THREADS;
         int isLast; // boolean
-
 
         for (int iteration = 0; iteration < iterations; ++iteration, ++column) {
 

@@ -45,6 +45,7 @@ struct SWPrefs {
     char* queryFile;
     char* databaseFile;
     MatcherScore threshold;
+    int shotgun;
 };
 
 int VERBOSE = DEFAULT_VERBOSE;
@@ -71,6 +72,7 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
     swPrefs->complement = 0;
     swPrefs->maximumGaps = 0;
     swPrefs->windowSize = 0;
+    swPrefs->shotgun = 0;
 
     swPrefs->queryFile = NULL;
     swPrefs->databaseFile = NULL;
@@ -105,6 +107,7 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
             {"test", no_argument, 0, 'x'},
             {"min-hits", required_argument, 0, 'b'},
             {"window", required_argument, 0, 'w'},
+            {"shotgun", required_argument, 0, 'o'},
             {0, 0, 0, 0}
         };
 
@@ -170,6 +173,9 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
         case 'b':
             swPrefs->maximumGaps = atoi(optarg);
             break;
+        case 'o':
+            swPrefs->shotgun = atoi(optarg);
+            break;
         case 'w':
             swPrefs->windowSize = atoi(optarg);
             break;
@@ -190,7 +196,9 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
         swPrefs->threshold = NO_THRESHOLD;
     }
 
-    if (mismatchDefined && matchDefined) {
+    if (swPrefs->shotgun != 0) {
+        swPrefs->matcher = matcherCreateEmbedded("SHOTGUN");
+    } else if (mismatchDefined && matchDefined) {
         swPrefs->matcher = matcherCreateMM(match, mismatch);
     } else if (!matcherArg) {
         swPrefs->matcher = matcherCreateEmbedded(embeededArg);
@@ -282,6 +290,10 @@ extern int swPrefsGetWindowSize(SWPrefs* swPrefs) {
     return swPrefs->windowSize;
 }
 
+extern int swPrefsShotgun(SWPrefs* swPrefs) {
+    return swPrefs->shotgun;
+}
+
 extern void swPrefsPrint(SWPrefs* swPrefs) {
 
     if (TEST_MODE) return;
@@ -336,6 +348,11 @@ OPTIONS:\n\
         score threshold\n\
         program will output not just the max score and its reconstruction, but\n\
         all the scores which are above the given threshold\n\
+    --shotgun <int>\n\
+        (optional)\n\
+        (default: 0) - not used\n\
+        accepts a positive integer, target data is treated as blocks of given\n\
+        size separated with any character which is not a DNA symbol (A, C, T, G)\n\
     --min-hits <int>\n\
         (optional)\n\
         (default: 0)\n\

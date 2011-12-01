@@ -82,6 +82,11 @@ OPTIONS:
         score threshold
         program will output not just the max score and its reconstruction, but
         all the scores which are above the given threshold
+    --shotgun <int>
+        (optional)
+        (default: 0) - not used
+        accepts a positive integer, target data is treated as blocks of given
+        size separated with any character which is not a DNA symbol (A, C, T, G)
     --min-hits <int>
         (optional)
         (default: 0)
