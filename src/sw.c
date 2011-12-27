@@ -28,7 +28,6 @@ Contact the author by mkorpar@gmail.com.
 #include "sw_solve.h"
 #include "nw_solve.h"
 #include "sw_reconstruct.h"
-#include "sw_gpu_param_search.h"
 #include "sw_threshold.h"
 
 #include "sw_prefs.h"
@@ -77,17 +76,10 @@ extern void swDelete(SW* sw) {
 
 extern void swRun(SW* sw) {
 
-    if (swPrefsParamSearch(sw->swPrefs)) {
-        swGPUParamSearch(sw->query, 
-            chainBaseGetChain(sw->database, 0), sw->swPrefs);
-        return;
-    }
-
     if (!TEST_MODE) {
         printf("%s\n", SEPARATOR2);
         swPrefsPrint(sw->swPrefs);
     }
-
 
     int chainIdx;
     Chain* chain1;

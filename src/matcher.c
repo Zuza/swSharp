@@ -34,7 +34,6 @@ Contact the author by mkorpar@gmail.com.
 #include "matrices/BLOSUM70.h"
 #include "matrices/BLAST.h"
 #include "matrices/CHIAR.h"
-#include "matrices/SHOTGUN.h"
 
 #define WILDCARD '*'
 
@@ -146,10 +145,6 @@ extern Matcher* matcherCreateEmbedded(char* typeName) {
         itemNumber = CHIAR_ITEM_NMR;
         items = CHIAR_ITEMS;
         scores = CHIAR_SCORES;
-    } else if (strcmp("SHOTGUN", typeName) == 0) {
-        itemNumber = SHOTGUN_ITEM_NMR;
-        items = SHOTGUN_ITEMS;
-        scores = SHOTGUN_SCORES;
     } else {
         printf("Warning: Similarity table %s not embedded. Using %s.\n",
             typeName, QUOTE(DEFUALT_MATCHER));
@@ -277,7 +272,8 @@ extern int matcherGetType(Matcher* matcher) {
     return matcher->type;
 }
 
-extern MatcherCode matcherGetCode(Matcher* matcher, MatcherItem item) {
+extern MatcherCode matcherGetCode(Matcher* matcher, MatcherItem item, 
+    int shotgun) {
 
     int isWildcard; // boolean
     int isExact; // boolean
@@ -286,6 +282,10 @@ extern MatcherCode matcherGetCode(Matcher* matcher, MatcherItem item) {
     MatcherItem item_cur; // current item
 
     MatcherCode itemCode = MATCHER_CODE_NOT_FOUND;
+
+    if (item == MATCHER_RESET_CHAR && shotgun) {
+        return MATCHER_RESET_CODE;
+    }
 
     for (itemIdx = 0; itemIdx < matcher->itemNumber; ++itemIdx) {
 

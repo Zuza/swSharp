@@ -43,7 +43,14 @@ extern SWData* swSolve(Chain* rowChain, Chain* columnChain,
     SWData* swData = swSolveSpecific(rowChain, columnChain, swPrefs);
 
     if (!swPrefsGlobal(swPrefs) && !swPrefsSolveOnly(swPrefs)) {
-        swSetStartCell(swDataGetResult(swData, 0), rowChain, columnChain, swPrefs);
+
+        int resultIdx;
+        int resultNmr = swDataGetResultNmr(swData);
+
+        for (resultIdx = 0; resultIdx < resultNmr; ++resultIdx) {
+            swSetStartCell(swDataGetResult(swData, resultIdx), rowChain, 
+                columnChain, swPrefs);
+        }
     }
 
     return swData;

@@ -36,18 +36,31 @@ extern SWData* swSolveGPU(Chain* rowChain, Chain* columnChain,
     SWPrefs* swPrefs) {
 
     int matcherType = matcherGetType(swPrefsGetMatcher(swPrefs));
-    int resultBlockSize = swPrefsShotgun(swPrefs);
+    int shotgun = swPrefsShotgun(swPrefs);
+
+    if (shotgun) {
+        int row;
+        for (row = 0; row < chainGetLength(rowChain); ++row) {
+            if (chainGetCode(rowChain, row) == MATCHER_RESET_CODE) {
+                printf(
+                    "\nERROR: Query file contains reset character \"%c\".\n", 
+                    MATCHER_RESET_CHAR
+                );
+                exit(-1);
+            }
+        }
+    }
 
     if (matcherType == MATCHER_MATRIX) {
 
-        if (resultBlockSize != 0) {
+        if (shotgun != 0) {
             return swSolveShotgunGPUSM(rowChain, columnChain, swPrefs); 
         }
 
         return swSolveGPUSM(rowChain, columnChain, swPrefs); 
     } else {
 
-        if (resultBlockSize != 0) {
+        if (shotgun != 0) {
             return swSolveShotgunGPUMM(rowChain, columnChain, swPrefs); 
         }
 

@@ -44,7 +44,7 @@ struct Chain {
 
 static void addReversedChain(Chain* chain);
 
-static void readFromBuffer(Chain* chain, char* fileBuffer, Matcher* matcher);
+static void readFromBuffer(Chain* chain, char* fileBuffer, SWPrefs* swPrefs);
 
 extern Chain* chainCreateFromFile(char* filePath, SWPrefs* swPrefs) {
 
@@ -67,7 +67,7 @@ extern Chain* chainCreateFromBuffer(char* fileBuffer, SWPrefs* swPrefs) {
     Chain* chain = (Chain*) malloc(sizeof(struct Chain));
     chain->subchain = 0;
 
-    readFromBuffer(chain, fileBuffer, swPrefsGetMatcher(swPrefs));
+    readFromBuffer(chain, fileBuffer, swPrefs);
 
     if (swPrefsSolveOnly(swPrefs)) {
         chain->reverseCodes = NULL;
@@ -126,7 +126,8 @@ extern Chain* chainCreateComplement(Chain* chain, SWPrefs* swPrefs) {
         }
 
         complement->items[normal] = newItem;
-        complement->codes[normal] = matcherGetCode(matcher, newItem);
+        complement->codes[normal] = matcherGetCode(matcher, newItem, 
+            swPrefsShotgun(swPrefs));
     }
 
     if (swPrefsSolveOnly(swPrefs)) {
@@ -181,8 +182,10 @@ static void addReversedChain(Chain* chain) {
     }
 }
 
-static void readFromBuffer(Chain* chain, char* fileBuffer, Matcher* matcher) {
+static void readFromBuffer(Chain* chain, char* fileBuffer, SWPrefs* swPrefs) {
 
+    Matcher* matcher = swPrefsGetMatcher(swPrefs);
+    int shotgun = swPrefsShotgun(swPrefs);
     int fileLength = strlen(fileBuffer);
 
     // Maximum chain length is equal to input file length.
@@ -192,7 +195,7 @@ static void readFromBuffer(Chain* chain, char* fileBuffer, Matcher* matcher) {
     chain->length = 0;
 
     int fileCharIdx;
-    int isLetter; // boolean
+    int isSpace; // boolean
     ChainItem chainItem;
     ChainItem chainCode;
 
@@ -209,10 +212,9 @@ static void readFromBuffer(Chain* chain, char* fileBuffer, Matcher* matcher) {
     // codes and write them to code array.
     for (fileCharIdx = start; fileCharIdx < fileLength; ++fileCharIdx) {
 
-        isLetter = isalpha(fileBuffer[fileCharIdx]);
+        isSpace = isspace(fileBuffer[fileCharIdx]);
 
-        // Only letter characters are stored and coded into the chain.
-        if (!isLetter) {
+        if (isSpace) {
             continue;
         }
 
@@ -221,7 +223,7 @@ static void readFromBuffer(Chain* chain, char* fileBuffer, Matcher* matcher) {
         
         if (fillItems) matcherAddItem(matcher, chainItem);
 
-        chainCode = (ChainCode) matcherGetCode(matcher, chainItem);
+        chainCode = (ChainCode) matcherGetCode(matcher, chainItem, shotgun);
         chain->codes[chain->length] = chainCode;
 
         if (chain->codes[chain->length] == MATCHER_CODE_NOT_FOUND) {

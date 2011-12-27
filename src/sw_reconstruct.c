@@ -200,7 +200,7 @@ static void reconstruct(SWData* swData, SWResult* swResult, Chain* rowChain,
             (!erasing && moveIdx == length - 1)
         ) {
 
-            if (moveIdx - moveIdxLocal > 0) {
+            if (moveIdx - moveIdxLocal >= 0) {
                 rowReconstruction = malloc((moveIdx - moveIdxLocal + 2) * sizeof(char));
                 columnReconstruction = malloc((moveIdx - moveIdxLocal + 2) * sizeof(char));
 

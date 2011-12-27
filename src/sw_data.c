@@ -37,6 +37,7 @@ struct SWData {
     SWResult** results;
     double time;
     int global;
+    int shotgun;
 };
 
 static void addResult(SWData* swData, SWResult* result);
@@ -52,6 +53,7 @@ extern SWData* swDataCreate(int rows, int columns, SWPrefs* swPrefs) {
     swData->resultNmr = 0;
     swData->resultSize = 0;
     swData->results = NULL;
+    swData->shotgun = swPrefsShotgun(swPrefs);
 
     swData->time = 0;
     
@@ -121,7 +123,9 @@ extern void swDataPrint(SWData* swData) {
         swData->rows, swData->columns, swData->time, gcups
     );
     
-    sortResults(swData->results, 0, swData->resultNmr - 1);
+    if (!swData->shotgun) {
+        sortResults(swData->results, 0, swData->resultNmr - 1);
+    }
 
     int resultIdx;
     for (resultIdx = swData->resultNmr - 1; resultIdx >= 0; --resultIdx) {

@@ -89,9 +89,6 @@ static SWParams CPU_CNST;
 
 static void prepareConstants(int rows, int columns, SWPrefs* swPrefs) {
 
-    CPU_CNST.BLOCKS = swPrefsGetCudaBlocks(swPrefs);
-    CPU_CNST.THREADS = swPrefsGetCudaThreads(swPrefs);
-
     CPU_CNST.ROWS = rows + rows % ALPHA;
     CPU_CNST.COLUMNS = columns + (CPU_CNST.BLOCKS - columns % CPU_CNST.BLOCKS);
 
@@ -131,8 +128,8 @@ static void prepareParameters(int columns, SWPrefs* swPrefs) {
     }
     // End problem conditions.
 
-    swPrefsSetCudaThreads(swPrefs, threads);
-    swPrefsSetCudaBlocks(swPrefs, blocks);
+    CPU_CNST.THREADS = threads;
+    CPU_CNST.BLOCKS = blocks;
 }
 
 static int swapChains(Chain** rowChain, Chain** columnChain) {

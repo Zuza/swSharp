@@ -32,6 +32,10 @@ Contact the author by mkorpar@gmail.com.
 #define MATCHER_SCORE_MIN -10e10
 #define MATCHER_SCORE_MAX -MATCHER_SCORE_MIN
 
+// for shotgun usage
+#define MATCHER_RESET_CHAR '_'
+#define MATCHER_RESET_CODE MATCHER_MAX_ITEMS + 3
+
 typedef struct Matcher Matcher;
 typedef double MatcherScore;
 typedef char MatcherCode; // must always be a decimal type
@@ -49,7 +53,8 @@ extern void matcherGetScores(Matcher* matcher, MatcherScore* scores);
 extern MatcherScore matcherGetScore(Matcher* matcher, MatcherCode firstItem,
         MatcherCode secondItem);
 extern int matcherGetType(Matcher* matcher);
-extern MatcherCode matcherGetCode(Matcher* matcher, MatcherItem item);
+extern MatcherCode matcherGetCode(Matcher* matcher, MatcherItem item, 
+        int shotgun);
 
 extern void matcherAddItem(Matcher* matcher, MatcherItem item);
 

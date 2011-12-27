@@ -50,6 +50,12 @@ static MatcherScore getScoreNW(MatcherScore matchFactor, MatcherScore insertFact
 
 extern SWData* swSolveCPU(Chain* rowChain, Chain* columnChain, 
     SWPrefs* swPrefs) {
+
+    if (swPrefsShotgun(swPrefs)) {
+        printf("\nERROR: CPU shotgun solving not supported.\n");
+        exit(-1);
+    }
+
     return solveCPU(rowChain, columnChain, swPrefs, SOLVE, IRELEVANT, SW);
 }
 

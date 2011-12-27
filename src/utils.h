@@ -32,5 +32,7 @@ extern void fileReadError(char* filePath);
 extern void printPercentageBar(int percent);
 
 extern int preciseEqual(double a, double b);
+
+extern int cudaCardNmr();
 #endif // __UTILSH__
 

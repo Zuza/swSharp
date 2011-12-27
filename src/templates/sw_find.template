@@ -65,12 +65,14 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
             hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
             hBusToSWItem(&swItem, &hBusItem);
 
-            swItemSolve(&swItem, rowCodes, columnCode, NW);
-
-            updateResult(&swItem, &results[blockIdx.x], row, column);
+            if (columnCode == MATCHER_RESET_CODE) {
+                swItem = swItemEmpty;
+            } else {
+                swItemSolve(&swItem, rowCodes, columnCode, NW);
+                updateResult(&swItem, &results[blockIdx.x], row, column);
+            }
 
             swItemProgresses(&swItem);
-
             swItemToHBus(&swItem, &hBusItem);
 
             isLast = iteration == iterations - 1;
@@ -144,12 +146,14 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
             hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
             hBusToSWItem(&swItem, &hBusItem);
 
-            swItemSolve(&swItem, rowCodes, columnCode, NW);
-
-            updateResult(&swItem, &results[blockIdx.x], row, column);
+            if (columnCode == MATCHER_RESET_CODE) {
+                swItem = swItemEmpty;
+            } else {
+                swItemSolve(&swItem, rowCodes, columnCode, NW);
+                updateResult(&swItem, &results[blockIdx.x], row, column);
+            }
 
             swItemProgresses(&swItem);
-
             swItemToHBus(&swItem, &hBusItem);
 
             isLast = iteration == iterations - 1;

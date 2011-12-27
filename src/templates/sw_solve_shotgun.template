@@ -19,7 +19,8 @@ Contact the author by mkorpar@gmail.com.
 */
 
 __global__ static void solveShort(int diagonal, ChainCode* rowChain, 
-    ChainCode* columnChain, Bus bus, Result* results, int resultBlockSize) {
+    ChainCode* columnChain, Bus bus, Result* results, int* resetIndicies, 
+    int resultBlocks) {
 
     int row = getRow(diagonal);
     int column = getColumn();
@@ -29,6 +30,11 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
     if (column < 0) {
         column = column + GPU_CNST.COLUMNS;
         row = row - GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
+    }
+
+    int current = 0;
+    while (resetIndicies[current] < column) {
+        current++;
     }
 
     // Read in row codes. Since solving is done horizontal row codes are 
@@ -63,12 +69,15 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
             hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
             hBusToSWItem(&swItem, &hBusItem);
 
-            swItemSolve(&swItem, rowCodes, columnCode, SW);
-
-            updateResult(&swItem, &(results[row / resultBlockSize]), row, column);
+            if (columnCode == MATCHER_RESET_CODE) {
+                current++;
+                swItem = swItemEmpty;
+            } else {
+                swItemSolve(&swItem, rowCodes, columnCode, SW);
+                updateResult(&swItem, &(results[current]), row, column);
+            }
 
             swItemProgresses(&swItem);
-
             swItemToHBus(&swItem, &hBusItem);
 
             isLast = iteration == iterations - 1;
@@ -80,6 +89,7 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
         if (column == GPU_CNST.COLUMNS) {
             // After thread finishes a row it starts with a new row. 
             column = 0;
+            current = 0;
             row = row + GPU_CNST.BLOCKS * GPU_CNST.THREADS * ALPHA;
             rowValid = ((row >= 0) && (row < GPU_CNST.REAL_ROWS));
 
@@ -102,12 +112,11 @@ __global__ static void solveShort(int diagonal, ChainCode* rowChain,
         swItemToVBus(&swItem, &vBusItem);
         bus.vertical[getVBusIdx(row)] = vBusItem;
     }
-
-    //updateGlobalResult(&localResult, results, sharedMemory);
 }
 
 __global__ static void solveLong(int diagonal, ChainCode* rowChain, 
-    ChainCode* columnChain, Bus bus, Result* results, int resultBlockSize) {
+    ChainCode* columnChain, Bus bus, Result* results, int* resetIndicies, 
+    int resultBlocks) {
 
     extern __shared__ SharedMemory sharedMemory[];
 
@@ -116,6 +125,11 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
     if (row >= 0 && row < GPU_CNST.REAL_ROWS) {
 
         int column = getColumn() + GPU_CNST.THREADS;
+
+        int current = 0;
+        while (resetIndicies[current] < column) {
+            current++;
+        }
 
         // Read in row codes. Since solving is done horizontal row codes are 
         // read only once every processing row.
@@ -145,12 +159,15 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
             hBusItem = loadHBus(sharedMemory, bus.horizontal, column, iteration);
             hBusToSWItem(&swItem, &hBusItem);
 
-            swItemSolve(&swItem, rowCodes, columnCode, SW);
-
-            updateResult(&swItem, &(results[row / resultBlockSize]), row, column);
+            if (columnCode == MATCHER_RESET_CODE) {
+                current++;
+                swItem = swItemEmpty;
+            } else {
+                swItemSolve(&swItem, rowCodes, columnCode, SW);
+                updateResult(&swItem, &(results[current]), row, column);
+            }
 
             swItemProgresses(&swItem);
-
             swItemToHBus(&swItem, &hBusItem);
 
             isLast = iteration == iterations - 1;
@@ -162,8 +179,6 @@ __global__ static void solveLong(int diagonal, ChainCode* rowChain,
         swItemToVBus(&swItem, &vBusItem);
         bus.vertical[getVBusIdx(row)] = vBusItem;
     }
-
-    //updateGlobalResult(&localResult, results, sharedMemory);
 }
 
 static SWData* swSolveShotgunGPU(Chain* rowChain, Chain* columnChain, 
@@ -185,9 +200,30 @@ static SWData* swSolveShotgunGPU(Chain* rowChain, Chain* columnChain,
 
     Bus busGPU = {initHBusGPU(swPrefs, SW), initVBusGPU()};
 
+    int* resetIndicies = (int*) malloc(columns * sizeof(int));
+    int resultBlocks = 0;
+    for (int column = 0; column < columns; ++column) {
+        if (chainGetCode(columnChain, column) == MATCHER_RESET_CODE) {
+            resetIndicies[resultBlocks] = column;
+            resultBlocks++;
+        }
+    }
 
-    int resultBlockSize = swPrefsShotgun(swPrefs);
-    int resultBlocks = rows / resultBlockSize;
+    resetIndicies[resultBlocks] = columns;
+    resultBlocks++;
+
+    if (VERBOSE) {
+        printf("Shotgun boundaries:\n");
+        for (int i = 0; i < resultBlocks; ++i) {
+            printf("%d ", resetIndicies[i]);
+        }
+        printf("\n");
+    }
+
+    int* resetIndiciesGPU;
+    cudaMalloc(&resetIndiciesGPU, resultBlocks * sizeof(int));
+    cudaMemcpy(resetIndiciesGPU, resetIndicies, resultBlocks * sizeof(int), 
+        cudaMemcpyHostToDevice);
 
     Result* resultsGPU = initResultsGPU(resultBlocks);
     Result result;
@@ -203,10 +239,10 @@ static SWData* swSolveShotgunGPU(Chain* rowChain, Chain* columnChain,
 
         solveShort<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
             (diagonal, rowChainGPU, columnChainGPU, busGPU, resultsGPU, 
-                resultBlockSize);
+                resetIndiciesGPU, resultBlocks);
         solveLong<<< CPU_CNST.BLOCKS, CPU_CNST.THREADS, sharedMemorySize >>>
             (diagonal, rowChainGPU, columnChainGPU, busGPU, resultsGPU,
-                resultBlockSize);
+                resetIndiciesGPU, resultBlocks);
 
         cudaThreadSynchronize();
     }
@@ -234,12 +270,18 @@ static SWData* swSolveShotgunGPU(Chain* rowChain, Chain* columnChain,
             exit(-1);
         }
 
+        if (result.row == 0 && result.column == 0 && result.score == 0) {
+            continue;
+        }
+
         swDataAddResult(swData, swResultCreate(result.score, result.row, 
             result.column));
     }
     
+    free(resetIndicies);
     free(results);
 
+    cudaFree(resetIndiciesGPU);
     cudaFree(resultsGPU);
     cudaFree(busGPU.horizontal);
     cudaFree(busGPU.vertical);

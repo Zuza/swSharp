@@ -71,16 +71,11 @@ extern int swPrefsGetReconstructBlockLimit(SWPrefs* swPrefs);
 extern int swPrefsGetCudaThreads(SWPrefs* swPrefs);
 extern int swPrefsGetCudaBlocks(SWPrefs* swPrefs);
 
-extern void swPrefsSetCudaThreads(SWPrefs* swPrefs, int threads);
-extern void swPrefsSetCudaBlocks(SWPrefs* swPrefs, int blocks);
-
 extern int swPrefsForceCPU(SWPrefs* swPrefs);
 extern int swPrefsSolveOnly(SWPrefs* swPrefs);
 extern int swPrefsGlobal(SWPrefs* swPrefs);
-extern int swPrefsParamSearch(SWPrefs* swPrefs);
 extern int swPrefsComplement(SWPrefs* swPrefs);
 
-extern void swPrefsSetThreshold(SWPrefs* swPrefs, MatcherScore threshold);
 extern MatcherScore swPrefsGetThreshold(SWPrefs* swPrefs);
 
 extern char* swPrefsGetQueryFile(SWPrefs* swPrefs);
@@ -90,6 +85,8 @@ extern int swPrefsGetMaximumGaps(SWPrefs* swPrefs);
 extern int swPrefsGetWindowSize(SWPrefs* swPrefs);
 
 extern int swPrefsShotgun(SWPrefs* swPrefs);
+
+extern int swPrefsGetCardNmr(SWPrefs* swPrefs);
 
 extern void swPrefsPrint(SWPrefs* swPrefs);
 #endif // __SW_PREFSH__

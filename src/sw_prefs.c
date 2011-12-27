@@ -25,6 +25,7 @@ Contact the author by mkorpar@gmail.com.
 #include "sw_prefs.h"
 
 #include "matcher.h"
+#include "utils.h"
 
 #define CPU_RECONSTRUCT_BLOCK_LIMIT 1800
 
@@ -35,7 +36,6 @@ struct SWPrefs {
     int cudaThreads;
     int cudaBlocks;
     int reconstructBlockLimit;
-    int paramSearch;
     int forceCPU;
     int solveOnly;
     int global;
@@ -46,6 +46,7 @@ struct SWPrefs {
     char* databaseFile;
     MatcherScore threshold;
     int shotgun;
+    int cards;
 };
 
 int VERBOSE = DEFAULT_VERBOSE;
@@ -67,7 +68,6 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
     swPrefs->forceCPU = 0;
     swPrefs->solveOnly = 0;
     swPrefs->global = 0;
-    swPrefs->paramSearch = 0;
     swPrefs->threshold = NO_THRESHOLD;
     swPrefs->complement = 0;
     swPrefs->maximumGaps = 0;
@@ -102,12 +102,11 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
             {"solve", no_argument, 0, 's'},
             {"cpu", no_argument, 0, 'c'},
             {"verbose", no_argument, 0, 'v'},
-            {"param-search", no_argument, 0, 'p'},
             {"global", no_argument, 0, 'n'},
             {"test", no_argument, 0, 'x'},
             {"min-hits", required_argument, 0, 'b'},
             {"window", required_argument, 0, 'w'},
-            {"shotgun", required_argument, 0, 'o'},
+            {"shotgun", no_argument, 0, 'o'},
             {0, 0, 0, 0}
         };
 
@@ -144,9 +143,6 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
         case 'c':
             swPrefs->forceCPU = 1;
             break;
-        case 'p':
-            swPrefs->paramSearch = 1;
-            break;
         case 'v':
             VERBOSE = 1;
             break;
@@ -174,7 +170,7 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
             swPrefs->maximumGaps = atoi(optarg);
             break;
         case 'o':
-            swPrefs->shotgun = atoi(optarg);
+            swPrefs->shotgun = 1;
             break;
         case 'w':
             swPrefs->windowSize = atoi(optarg);
@@ -196,15 +192,15 @@ extern SWPrefs* swPrefsCreate(int argc, char* argv[]) {
         swPrefs->threshold = NO_THRESHOLD;
     }
 
-    if (swPrefs->shotgun != 0) {
-        swPrefs->matcher = matcherCreateEmbedded("SHOTGUN");
-    } else if (mismatchDefined && matchDefined) {
+    if (mismatchDefined && matchDefined) {
         swPrefs->matcher = matcherCreateMM(match, mismatch);
     } else if (!matcherArg) {
         swPrefs->matcher = matcherCreateEmbedded(embeededArg);
     } else {
         swPrefs->matcher = matcherCreateFromFile(matcherArg);
     }
+
+    swPrefs->cards = cudaCardNmr();
 
     return swPrefs;
 }
@@ -238,14 +234,6 @@ extern int swPrefsGetCudaBlocks(SWPrefs* swPrefs) {
     return swPrefs->cudaBlocks;
 }
 
-extern void swPrefsSetCudaThreads(SWPrefs* swPrefs, int threads) {
-    swPrefs->cudaThreads = threads;
-}
-
-extern void swPrefsSetCudaBlocks(SWPrefs* swPrefs, int blocks) {
-    swPrefs->cudaBlocks = blocks;
-}
-
 extern int swPrefsForceCPU(SWPrefs* swPrefs) {
     return swPrefs->forceCPU;
 }
@@ -258,16 +246,8 @@ extern int swPrefsGlobal(SWPrefs* swPrefs) {
     return swPrefs->global;
 }
 
-extern int swPrefsParamSearch(SWPrefs* swPrefs) {
-    return swPrefs->paramSearch;
-}
-
 extern int swPrefsComplement(SWPrefs* swPrefs) {
     return swPrefs->complement;
-}
-
-extern void swPrefsSetThreshold(SWPrefs* swPrefs, MatcherScore threshold) {
-    swPrefs->threshold = threshold;
 }
 
 extern MatcherScore swPrefsGetThreshold(SWPrefs* swPrefs) {
@@ -292,6 +272,10 @@ extern int swPrefsGetWindowSize(SWPrefs* swPrefs) {
 
 extern int swPrefsShotgun(SWPrefs* swPrefs) {
     return swPrefs->shotgun;
+}
+
+extern int swPrefsGetCardNmr(SWPrefs* swPrefs) {
+    return swPrefs->cards;
 }
 
 extern void swPrefsPrint(SWPrefs* swPrefs) {
@@ -348,11 +332,6 @@ OPTIONS:\n\
         score threshold\n\
         program will output not just the max score and its reconstruction, but\n\
         all the scores which are above the given threshold\n\
-    --shotgun <int>\n\
-        (optional)\n\
-        (default: 0) - not used\n\
-        accepts a positive integer, target data is treated as blocks of given\n\
-        size separated with any character which is not a DNA symbol (A, C, T, G)\n\
     --min-hits <int>\n\
         (optional)\n\
         (default: 0)\n\
@@ -367,15 +346,15 @@ FLAGS:\n\
     --complement \n\
         (optional)\n\
         if input is a nucleotide, search also the other strand \n\
+    --shotgun \n\
+        (optional)\n\
+        TODO\n\
     --solve \n\
         (optional)\n\
         solve only \n\
     --cpu \n\
         (optional)\n\
         force CPU solving\n\
-    --param-search \n\
-        (optional)\n\
-        CUDA block and thread number optimization search\n\
     --verbose\n\
         (optional)\n\
         verbose\n\
